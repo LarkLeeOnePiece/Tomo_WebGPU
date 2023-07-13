@@ -185,7 +185,7 @@ WGPUDevice SARTcreateDevice(WGPUBackendType type)
 		backend = static_cast<WGPUBackendType>(properties.backendType);
 
 		//add somthings about limitations for binding size
-		dawn::native::DawnDeviceDescriptor deviceDes = {};
+		WGPUDeviceDescriptor deviceDes = {};
 		WGPUSupportedLimits suplimits = {};
 		WGPURequiredLimits reqlimits = {};
 		adapter.GetLimits(&suplimits);

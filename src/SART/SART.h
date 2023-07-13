@@ -20,7 +20,7 @@ using namespace std;
 float radians(float angle);
 void SART();
 void linearize_projection();
-void Buffer_save(wgpu::Buffer gpubuffer, int buffer_size, int dim[3], string dataname);
+void Buffer_save(wgpu::Buffer gpubuffer, int buffer_size, int dim[3], string dataname,int spectrum=1);
 void DeLinearize_Projections(wgpu::Buffer Volume, size_t Volume_Size, float MaxValue);
 
 float get_angle();

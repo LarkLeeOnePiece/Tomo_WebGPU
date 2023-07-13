@@ -419,6 +419,8 @@
     <ClInclude Include="src\SART\SART.h" />
     <ClInclude Include="src\SART\GlobalStatement.h" />
     <ClInclude Include="src\SART\WebStruct.h" />
+    <ClInclude Include="src\LADMM\LADMM.h" />
+    <ClInclude Include="src\ExternGlobalVariables.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="lib\glm\glm\detail\func_common.inl" />
@@ -609,6 +611,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\SART\SART.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LADMM\LADMM.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

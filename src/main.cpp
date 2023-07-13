@@ -12,10 +12,77 @@
 #include "SART/SART.h"  //define functions related to SART 
 #include <windows.h>// for Sleep()
 #include "SART/MRCParser.h"  //处理MRC file
-#include "SART/GlobalStatement.h"   //声明全局变量 不进行定义
+#include "SART/GlobalStatement.h"   //这里面已经进行了全局变量的定义了，其他地方想要引用需要使用extern
 #include "SART/WebStruct.h"  //一些自定义结构
 
+
+//下面是LADMM的函数
+#include"LADMM/LADMM.h"
+
+
 using namespace std;
+
+//记录总结一个通用计算管线的基本框架和各流程作用
+void GPGPUSample(wgpu::Device device) {
+	
+	//1. 首先为了与 GPU 进行数据交换，需要一个叫绑定组的布局对象（类型是 GPUBindGroupLayout）来扩充管线的定义，
+	//这里可以提前预知这个布局要处理的资源类型（Buffer、Texture、Sampler）
+	//从而得到更快的处理速度
+	auto bindGroupLayout = utils::MakeBindGroupLayout(
+		device, {
+			{0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for projection data
+			//{bindingNum,ShaderSatge,BindingType},
+		});
+
+	//2. Create BindGroup
+	wgpu::BindGroup ComputeBindGroup = utils::MakeBindGroup(
+		device, bindGroupLayout, {
+			{0, Ori_pro_buffer, 0, data_size},
+		  //BindingInitializationHelper->{bingding序号，buffer，offest,size}
+		});
+
+	//3. pass the Layout for the pipeline Layout
+	wgpu::PipelineLayout pipelineLayout = utils::MakeBasicPipelineLayout(device, &bindGroupLayout); //后面应该可以直接使用pipelineLayout
+
+	//准备创建pipeline，需要准备shader,入口信息
+	//创建shader
+	std::string shaderFile( "work/shader/xxxx.fs");
+	wgpu::ShaderModule ShaderModule = ShaderUtil::loadAndCompileShader(device, shaderFile);
+	//setup FP compute pipeline
+	wgpu::ComputePipelineDescriptor comDescriptor;
+	wgpu::ProgrammableStageDescriptor proDescriptor;
+	proDescriptor.entryPoint = "main";
+	proDescriptor.module = ShaderModule;
+	comDescriptor.layout = pipelineLayout;
+	comDescriptor.compute = proDescriptor;
+
+	//4.Create compute pipeline
+	wgpu::ComputePipeline computepipeline = device.CreateComputePipeline(&comDescriptor);
+	//获取指令队列
+	auto queue = device.GetQueue();
+	
+
+	//5. 创建指令编码器
+	wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+
+	wgpu::ComputePassDescriptor compassdescriptor;
+	compassdescriptor.label = "xxx编码通道";
+	wgpu::ComputePassEncoder computepass;
+
+	computepass = encoder.BeginComputePass(&compassdescriptor);
+	computepass.SetPipeline(computepipeline);
+	computepass.SetBindGroup(0, ComputeBindGroup);
+
+	int workgroupCountX = ceil((float)pdim.x / 8.0);	//这里每次都需要调整
+	int workgroupCountY = ceil((float)vdim.y / 8.0);   //这里每次都需要调整，需要跟shader对应
+
+	computepass.DispatchWorkgroups(workgroupCountX, workgroupCountY); //运行shader
+	computepass.End();
+	wgpu::CommandBuffer commands = encoder.Finish();
+	queue.Submit(1, &commands);  //提交到GPU的指令队列中运行
+
+}
+
 /**
   * Main application entry point.
   */
@@ -24,14 +91,18 @@ void Initial() {
 	cout << "************* Initial .... ***************" << endl;
 	filename = ".\\data\\ts_16.ali"; 
 	starting_angle= 0.0f;   angle_step = 0.0f;
-	tiled = true;  number_extra_rows = 80; number_of_tiles = 10;   //for tiled data
+	tiled = true;  number_extra_rows = 80; number_of_tiles = 25;   //for tiled data
 	volume_depth = 300;
 	sample_rate = 0.5;
 	current_tile = 0;
 	current_projection = 0;
 	random_projection_order = false;
 	chillfactor = 0.2;
-	data_term_iters = 1;
+	data_term_iters = 5;
+	proximal_iters = 2;
+
+
+
 	//To read MRC files, by Ondrej
 	mrcParser.load_original(filename);
 	//Get the projection sizes and print
@@ -54,6 +125,29 @@ void Initial() {
 	//生成投影数据
 	h_proj_data = CImgFloat(pdim.x, pdim.y, pdim.z, 1, 0.0f);
 	h_proj_data._data = mrcParser.getData();
+
+	//从这里开始截图
+	if (ifcrop) {
+		int fromx = 256, widthx = 512;
+		int fromy = 464, heighty = 512;
+		int index = 0;
+		h_crop_proj_data = CImgFloat(widthx, heighty, pdim.z, 1, 0.0f);
+		for (int z = 0; z < pdim.z; z++) {
+			for (int y = fromy; y < fromy + heighty; y++) {
+				for (int x = fromx; x < fromx + widthx; x++) {
+					h_crop_proj_data._data[index] = h_proj_data._data[x + pdim.x * y + pdim.x * pdim.y * z];
+					index++;
+				}
+			}
+		}
+		pdim.x = widthx; widthx; pdim.y = heighty;
+		tiled = true;  number_extra_rows = 80; number_of_tiles = 10;   //for tiled data
+	}
+
+	
+
+	//h_crop_proj_data.save_analyze("my_crop.mrc");
+	
 
 	//tiled or not
 	if (tiled && (number_of_tiles != 1))
@@ -108,7 +202,13 @@ void Initial() {
 	source_object_distance = 1.05 * (sqrt((float)(vdim.x * vdim.x) + (float)(vdim.z * vdim.z)));
 	M = ceil((2.0 * (source_object_distance + vdelta.z)) / sample_rate);
 	//Get the sizes in bytes
-	data_size = h_proj_data.size() * sizeof(float); //Original projection data size
+	if (ifcrop) {
+		data_size = h_crop_proj_data.size() * sizeof(float); //Original projection data size
+	}
+	else {
+		data_size = h_proj_data.size() * sizeof(float); //Original projection data size
+	}
+	
 	recon_size = vdim.x * vdim.y * vdim.z * sizeof(float); //Reconstructed volume size
 	proj_size = pdim.x * pdim.y * sizeof(float); //Size of projection image, correction image, ray length image
 	crop_size = pdim.x * tile_size * vdim.z * sizeof(float);
@@ -120,9 +220,13 @@ int main(int /*argc*/, char* /*argv*/[])
 {
 	//增加一行代码测试Branch功能
 	Initial();
+	init_LADMM();
 	cout << "open file" << filename << endl;
 	printf("%d projections of size: %d, %d loaded succesfully.\n", pdim.z, pdim.x, pdim.y);
-
+	if (ifcrop) {
+		printf("Using Crop data to reconstruct");
+	}
+		
 	printf("Projection order:\n");
 	for (int i = 0; i < pdim.z - 1; i++)
 		printf("%d, ", projections[i]);
@@ -164,28 +268,40 @@ int main(int /*argc*/, char* /*argv*/[])
 	intVAR.padding = padding;
 
 	//先查看linearized结果
-	Ori_pro_buffer = utils::CreateBufferFromData(device, h_proj_data._data, data_size, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);//最后需要被复制到CPU的内存中
+	if (ifcrop) {
+		Ori_pro_buffer = utils::CreateBufferFromData(device, h_crop_proj_data._data, data_size, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);//最后需要被复制到CPU的内存中
+	}
+	else {
+		Ori_pro_buffer = utils::CreateBufferFromData(device, h_proj_data._data, data_size, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);//最后需要被复制到CPU的内存中
+	}
+	
 	Cal_rec_buffer = utils::CreateBuffer(device, recon_size, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);//for reconstuction
 	H_rec_buffer = utils::CreateBuffer(device, recon_size, wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst);//for reconstuction
-	Dim_buffer = utils::CreateBufferFromData(device,(void*)&AllDim, sizeof(AllDim), wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);  // Save the  volume dim 
+	Dim_buffer = utils::CreateBufferFromData(device,(void*)&AllDim, sizeof(AllDim), wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopySrc);  // Save the  volume dim 
 	ray_dir_buffer= utils::CreateBuffer(device, sizeof(dir), wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
-	flo_var_buffer= utils::CreateBufferFromData(device,(void*)&floatVAR, sizeof(floatVAR), wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
+	flo_var_buffer= utils::CreateBufferFromData(device,(void*)&floatVAR, sizeof(floatVAR), wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopySrc);
 	int_var_buffer= utils::CreateBuffer(device, sizeof(intVAR), wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
 	cor_img_buffer= utils::CreateBuffer(device,proj_size, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
 	pip_buffer = utils::CreateBuffer(device, sizeof(pip), wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
 	per_crop_buffer= utils::CreateBuffer(device, crop_size, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
+	LADMM_Paras_buffer = utils::CreateBufferFromData(device, (void*)&LADMMParameters, sizeof(LADMMParameters), wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopySrc);
+
 	
-
 	linearize_projection();// 线性的结果对比可以认为是正确的
-
 	Max = utils::CreateBufferFromData(device, &MAX, sizeof(MAX), wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);//最后需要被复制到CPU的内存中,has max value after delinearizing
-
-
+	LADMM();
+	
+	/*
+	linearize_projection();// 线性的结果对比可以认为是正确的
+	Max = utils::CreateBufferFromData(device, &MAX, sizeof(MAX), wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);//最后需要被复制到CPU的内存中,has max value after delinearizing
 	SART();
-
 	printf("Main:  MAX=%f", MAX);
 	string save_result = ".\\test\\REC_it" + std::to_string(data_term_iters) + "_SART_"+".hdr";//类别+迭代次数+算法
 	h_rec_vol.save_analyze(save_result.c_str());
+	*/
+
+	
+
 
 	return 0;
 }

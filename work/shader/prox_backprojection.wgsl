@@ -27,6 +27,7 @@ struct IntVar{
     number_extra_rows:i32,
     padding:i32,
 }
+
 @group(0) @binding(0) var<storage,write> Originalprojection : array<f32>;
 @group(0) @binding(1) var<storage,write> Reconstructvolume : array<f32>;
 @group(0) @binding(2) var<uniform> AllDim : Dim;  
@@ -35,7 +36,6 @@ struct IntVar{
 @group(0) @binding(5) var<storage,write> intconstVar : IntVar;
 @group(0) @binding(6) var<storage,write> CorrectionImg : array<f32>;
 @group(0) @binding(7) var<storage,write> pip : vec3<f32>;
-
 //input point
 //output rotated point
 fn rotate_anticlockwise(pos:vec3<f32>)->vec3<f32>

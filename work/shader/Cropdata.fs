@@ -24,7 +24,7 @@ struct IntVar{
 }
 
 @group(0) @binding(0) var<storage,write> OriVol : array<f32>;
-@group(0) @binding(1) var<storage,write> AllDim : Dim;  
+@group(0) @binding(1) var<uniform> AllDim : Dim;  
 @group(0) @binding(2) var<storage,write> intconstVar : IntVar;
 @group(0) @binding(3) var<storage,write> CropResult : array<f32>;
 

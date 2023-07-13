@@ -79,7 +79,7 @@ float get_angle()
 //传入原始GPU,函数会自动复制，并保存为图像文件
 
 
-void Buffer_save(wgpu::Buffer gpubuffer, int buffer_size, int dim[3], string dataname) {
+void Buffer_save(wgpu::Buffer gpubuffer, int buffer_size, int dim[3], string dataname, int spectrum) {
 	struct mydata {
 		bool IfFinish;
 	};
@@ -107,7 +107,7 @@ void Buffer_save(wgpu::Buffer gpubuffer, int buffer_size, int dim[3], string dat
 
 	typedef cimg_library::CImg<float> CImgFloat;		//Convenient for saving data as .hdr
 	CImgFloat temp_Img_data;
-	temp_Img_data = CImgFloat(dim[0], dim[1], dim[2], 1, 0.0f);  //This is for the whole volume without padding
+	temp_Img_data = CImgFloat(dim[0], dim[1], dim[2], spectrum, 0.0f);  //This is for the whole volume without padding
 	temp_Img_data._data = (float*)host_buffer.GetConstMappedRange(0, buffer_size);
 	string file_save_path = ".\\test\\data" + dataname + ".hdr";
 	temp_Img_data.save_analyze(file_save_path.c_str());
@@ -136,7 +136,7 @@ void linearize_projection() {
 	auto LPbindGroupLayout = utils::MakeBindGroupLayout(
 		device, {
 			{0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
-			{1, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
+			{1, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform},   //
 			{2, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
 			{3, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
 
@@ -293,7 +293,7 @@ void DeLinearize_Projections(wgpu::Buffer Volume, size_t Volume_Size,float MaxVa
 		device, {
 			{0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
 			{1, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
-			{2, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
+			{2, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform},   //
 
 		});
 	//2. 绑定组
@@ -367,7 +367,7 @@ void Crop_data(wgpu::Buffer Rec_Vol, size_t Rec_Vol_Size, wgpu::Buffer CR_buffer
 	auto TempbindGroupLayout = utils::MakeBindGroupLayout(
 		device, {
 			{0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
-			{1, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
+			{1, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform},   //
 			{2, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
 			{3, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   //
 
@@ -430,15 +430,15 @@ void SART() {
 	//int tempsize = vdim.x * vdim.y * vdim.z * sizeof(float);
 	float* tempzero = (float*)malloc(recon_size);
 	memset(tempzero, 0, recon_size);
-	time(&start);
+	
 	//Forward projection and BackProjection
 	auto bindGroupLayout = utils::MakeBindGroupLayout(
 		device, {
 			{0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for projection data
 			{1, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for calculating data
-			{2, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for DIM data
+			{2, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform},   // for DIM data
 			{3, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for ray dir data
-			{4, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for float var
+			{4, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform},   // for float var
 			{5, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for int var
 			{6, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for cor_img 
 			{7, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},   // for pip 
@@ -502,10 +502,13 @@ void SART() {
 	int bpworkgroupCountY = ceil((float)vdim.y / 8.0);
 	int bpworkgroupCountZ = ceil((float)vdim.z / 8.0);
 
+	
 	for (int tile = 0; tile < number_of_tiles; tile++) {//分块处理
 		current_tile = tile;
+		time(&start);
 		for (int data_iters = 0; data_iters < data_term_iters; data_iters++)
 		{
+			
 			//Shuffle projection order
 			if ((current_tile == 0))
 			{
@@ -578,6 +581,10 @@ void SART() {
 				//Buffer_save(Cal_rec_buffer, recon_size, tempdim3, file3);
 			}
 		}
+		time(&time_end);
+		float cost = difftime(time_end, start);
+		printf("SART time consumption: %f s\n", cost);
+
 		DeLinearize_Projections(Cal_rec_buffer,recon_size, MAX);//Delinearizing 
 		Crop_data(Cal_rec_buffer, recon_size, per_crop_buffer, crop_size);
 
@@ -588,9 +595,7 @@ void SART() {
 		queue.WriteBuffer(Cal_rec_buffer, 0, (void*)tempzero, recon_size);//Clear the calculate
 
 	}
-	time(&time_end);
-	float cost = difftime(time_end, start);
-	printf("SART time consumption: %f s\n", cost);
+	
 }
 
 void Piece_Buffer_copy(wgpu::Buffer gpubuffer, int buffer_size, string dataname){

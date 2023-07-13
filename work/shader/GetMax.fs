@@ -18,7 +18,7 @@ struct Matrix {
       data: array<f32>,
     }
     @group(0) @binding(0) var<storage,write> Originalprojection : Matrix;
-    @group(0) @binding(1) var<storage,write> AllDim : Dim; 
+    @group(0) @binding(1) var<uniform> AllDim : Dim; 
     @group(0) @binding(2) var<storage,write> per_slice :Matrix;
 
     @stage(compute) @workgroup_size(1,1,8)

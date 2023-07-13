@@ -27,6 +27,13 @@ struct IntVar{
     number_extra_rows:i32,
     padding:i32,
 }
+struct LADMM_parameters {
+    mu:f32,
+    ro:f32,
+    lambda:f32,
+    sigma:f32,
+};
+
 @group(0) @binding(0) var<storage,write> Originalprojection : array<f32>;
 @group(0) @binding(1) var<storage,write> Reconstructvolume : array<f32>;
 @group(0) @binding(2) var<uniform> AllDim : Dim;  
@@ -35,6 +42,8 @@ struct IntVar{
 @group(0) @binding(5) var<storage,write> intconstVar : IntVar;
 @group(0) @binding(6) var<storage,write> CorrectionImg : array<f32>;
 @group(0) @binding(7) var<storage,write> pip : vec3<f32>;
+@group(0) @binding(8) var<uniform> LADMM_Vars: LADMM_parameters;
+@group(0) @binding(9) var<storage,write> yslack: array<f32>;
 
 fn rotate_clockwise(pos:vec3<f32>)->vec3<f32>{
 	//dir.z==cos   dir.x==sin
@@ -49,7 +58,7 @@ fn get_ray_origin(pos:vec3<f32>)->vec3<f32>
 	var roPOS:vec3<f32>=rotate_clockwise(pos);
 
 	//'Decenter' to volume coordinates
-	roPOS = roPOS + vec3<f32>(vdelta.x, 0, vdelta.z);//这里理解应该是把全部的点都旋转了
+	roPOS = roPOS + vec3<f32>(vdelta.x, 0, vdelta.z);//杩欓噷鐞嗚В搴旇鏄妸鍏ㄩ儴鐨勭偣閮芥棆杞簡
 	return roPOS;
 }
 //get_index
@@ -197,7 +206,7 @@ fn FPmain(@builtin(global_invocation_id) global_id : vec3<u32>) {
 		let M:i32=intconstVar.sample_num;
 		let sample_rate:f32=floatconstVar.sample_rate;
         let current_projection=intconstVar.current_projection;
-
+        let mu:f32=LADMM_Vars.mu; let ro:f32=LADMM_Vars.ro;let lambda:f32=LADMM_Vars.lambda;
 
 		if ((row >= 0) && (row < pdim.y) && (gy < vdim.y) && (col < pdim.x))
 		{
@@ -236,12 +245,13 @@ fn FPmain(@builtin(global_invocation_id) global_id : vec3<u32>) {
 				pos = pos + sample_rate*dir;
 			}
 
-            var ray_length:f32=get_length(exit_pos-entry_pos);
+            var ray_length:f32=f32(1.0)+lambda*get_length(exit_pos-entry_pos);
 
             //the index in the correction projection is equal to the projection
+            //Correction = (lambda*(original - FP) - y)/ray_length, will be used updating X
             let indexInPro=pixel_index+current_projection*pdim.x*pdim.y;// the correspond point in projection data
-            if(ray_length>f32(0)&&Originalprojection[indexInPro]>f32(0)){     
-                CorrectionImg[pixel_index]=(Originalprojection[indexInPro]-ray_sum)/ray_length;
+            if(ray_length>f32(1)&&Originalprojection[indexInPro]>f32(0)){     
+                CorrectionImg[pixel_index]=(lambda*(Originalprojection[indexInPro]-ray_sum)-yslack[pixel_index])/ray_length;
 				//CorrectionImg[pixel_index]= inteVAR   ;
 				//CorrectionImg[pixel_index]=Originalprojection[indexInPro];
 				//CorrectionImg[pixel_index]=ray_length;

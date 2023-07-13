@@ -339,7 +339,9 @@
     <ClInclude Include="src\dawn\utils\TextureUtils.h" />
     <ClInclude Include="src\dawn\utils\WGPUHelpers.h" />
     <ClInclude Include="src\defines.h" />
+    <ClInclude Include="src\ExternGlobalVariables.h" />
     <ClInclude Include="src\Helper.h" />
+    <ClInclude Include="src\LADMM\LADMM.h" />
     <ClInclude Include="src\SART\GlobalStatement.h" />
     <ClInclude Include="src\SART\MRCParser.h" />
     <ClInclude Include="src\SART\SART.h" />
@@ -507,6 +509,7 @@
     <ClCompile Include="src\dawn\utils\WGPUHelpers.cpp" />
     <ClCompile Include="src\dawn\webgpu_cpp.cpp" />
     <ClCompile Include="src\Helper.cpp" />
+    <ClCompile Include="src\LADMM\LADMM.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\SART\MRCParser.cpp" />
     <ClCompile Include="src\SART\SART.cpp" />

@@ -41,3 +41,11 @@ typedef struct floatVar {
 	float sample_rate;
 	float chillfactor;
 }FLOATVAR;
+
+// dis_vs  sample_rate   chillfactor
+typedef struct LADMMVar {
+	float Var_mu;
+	float Var_ro;
+	float lambda;
+	float sigma;
+}LADMMVAR;

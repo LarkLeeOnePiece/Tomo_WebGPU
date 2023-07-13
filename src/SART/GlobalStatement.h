@@ -24,6 +24,7 @@ glm::vec3 pip;  // for point in plane
 DIM  AllDim;
 INTVAR intVAR;
 FLOATVAR floatVAR;
+LADMMVAR LADMMParameters;
 
 float starting_angle;
 float angle_step;
@@ -33,10 +34,12 @@ float MAX;
 float cost;
 float sint;
 float chillfactor;
-
+float tile_norm = 0;
 
 bool tiled;
 bool random_projection_order; //Random projection order or not
+bool check_convergence = true;
+bool ifcrop = false;
 
 int number_extra_rows;
 int number_of_tiles;
@@ -47,6 +50,7 @@ int M;  //sample step
 int padding;
 int data_term_iters; //Number of sart iterations for data term proximal operator
 int current_projection;
+int proximal_iters;
 
 size_t data_size;
 size_t recon_size;
@@ -59,8 +63,9 @@ std::vector<int> projections;
 std::vector<std::vector<int>> pw_projections;
 
 //Host data  这里面被SART包含会出错
-CImgFloat h_rec_vol, h_proj_data;//h_rec_vol for cropped result in host
-
+CImgFloat h_rec_vol, h_proj_data,h_crop_proj_data;//h_rec_vol for cropped result in host
+CImgFloat h_SART_y;//Used for the slack in SART proximal opertor
+CImgFloat h_ADMM_y;//used for ADMM updating for each iteration
 //GPU Var
 WGPUDevice wgpuDevice;
 wgpu::Device device;
@@ -75,3 +80,7 @@ wgpu::Buffer cor_img_buffer;
 wgpu::Buffer pip_buffer;
 wgpu::Buffer per_crop_buffer;
 wgpu::Buffer Max;  // for saving max value in linearized and delineared
+wgpu::Buffer SART_y_buffer;
+wgpu::Buffer ADMM_y_buffer;
+wgpu::Buffer ADMM_z_buffer;
+wgpu::Buffer LADMM_Paras_buffer;

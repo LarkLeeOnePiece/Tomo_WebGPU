@@ -20,7 +20,7 @@ struct Matrix {
     }
     @group(0) @binding(0) var<storage,write> RecVolume : Matrix;
     @group(0) @binding(1) var<storage,write> MaxValue :f32;
-    @group(0) @binding(2) var<storage,write> AllDim : Dim; 
+    @group(0) @binding(2) var<uniform> AllDim : Dim; 
 
     @stage(compute) @workgroup_size(8,8,8)
 fn DLmain(@builtin(global_invocation_id) global_id : vec3<u32>) {
